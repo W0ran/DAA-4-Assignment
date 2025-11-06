@@ -1,0 +1,99 @@
+package org.example.graph.dagsp;
+
+import graph.common.*;
+import graph.topo.TopologicalSort;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.junit.jupiter.api.Test;
+import graph.common.Graph;
+import graph.common.Metrics;
+import graph.common.Node;
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.*;
+import java.io.FileInputStream;
+
+
+class TopologicalSortTest {
+//Tests Topological Sort on JSON-loaded graphs. Verifies order validity against all edges
+    @Test
+    void testTopologicalOrder() {
+        try (FileInputStream fis = new FileInputStream("src/main/java/graph/data/small_graphs.json")) {
+            JSONArray graphsArray = new JSONArray(new String(fis.readAllBytes()));
+
+            for (int i = 0; i < graphsArray.length(); i++) {
+                JSONObject gObj = graphsArray.getJSONObject(i);
+                Graph g = new Graph(gObj.getInt("n"));
+
+                for (int v = 0; v < gObj.getInt("n"); v++) {
+                    g.setNode(v, new Node(v, "Node" + v, 1));
+                }
+
+                JSONArray edges = gObj.getJSONArray("edges");
+                for (int j = 0; j < edges.length(); j++) {
+                    JSONObject e = edges.getJSONObject(j);
+                    g.addEdge(e.getInt("u"), e.getInt("v"), e.getLong("w"));
+                }
+
+                Metrics metrics = new Metrics();
+                TopologicalSort topo = new TopologicalSort(g, metrics);
+                List<Integer> order = topo.kahnOrder();
+
+                assertEquals(g.n(), order.size(), "Topological order size mismatch");
+
+                for (int u : order) {
+                    for (var e : g.outEdges(u)) {
+                        int v = e.getTo();
+                        assertTrue(order.indexOf(u) < order.indexOf(v), "Topological order violated");
+                    }
+                }
+
+                System.out.println("Graph #" + i + " Topological order: " + order);
+                System.out.println("Metrics: " + metrics);
+            }
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            fail("Failed to read or process graphs JSON");
+        }
+    }
+//    Tests the edge case of an empty graph
+    @Test
+    void testEmptyGraphTopo() {
+        Graph g = new Graph(0);
+        Metrics m = new Metrics();
+        TopologicalSort topo = new TopologicalSort(g, m);
+        List<Integer> order = topo.kahnOrder();
+        assertTrue(order.isEmpty());
+    }
+//Tests the minimal case of a single node graph
+    @Test
+    void testSingleNodeTopo() {
+        Graph g = new Graph(1);
+        g.setNode(0, new Node(0, "N0", 1));
+        Metrics m = new Metrics();
+        TopologicalSort topo = new TopologicalSort(g, m);
+        List<Integer> order = topo.kahnOrder();
+        assertEquals(1, order.size());
+    }
+//    Tests Topological Sort on a simple, known 4-node DAG. Verifies relative node order.
+    @Test
+    void testTopologicalOrderSimpleDAG() {
+        Graph g = new Graph(4);
+        for (int i = 0; i < 4; i++) g.setNode(i, new Node(i, "N" + i, 1));
+
+        g.addEdge(0, 1, 1);
+        g.addEdge(0, 2, 1);
+        g.addEdge(1, 3, 1);
+        g.addEdge(2, 3, 1);
+
+        Metrics m = new Metrics();
+        TopologicalSort topo = new TopologicalSort(g, m);
+        List<Integer> order = topo.kahnOrder();
+
+        assertEquals(4, order.size());
+        assertTrue(order.indexOf(0) < order.indexOf(1));
+        assertTrue(order.indexOf(0) < order.indexOf(2));
+        assertTrue(order.indexOf(1) < order.indexOf(3));
+        assertTrue(order.indexOf(2) < order.indexOf(3));
+    }
+}
